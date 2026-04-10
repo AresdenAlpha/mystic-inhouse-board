@@ -473,10 +473,10 @@
         <input type="text" id="match-notes" placeholder="e.g. comeback win, final push..." />
       </div>
       <button class="btn-primary" onclick="logMatch()">Log Match</button>
-      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--c-border);display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn-sm" onclick="exportData()">Export Data (JSON)</button>
-        <button class="btn-sm" onclick="document.getElementById('import-file').click()">Import Data (JSON)</button>
-        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)" />
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--c-border);display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn-sm" onclick="exportDataConfirm()">Export Backup</button>
+        <button class="btn-sm" onclick="document.getElementById('import-match-file').click()">Import Match</button>
+        <input type="file" id="import-match-file" accept=".json" style="display:none" onchange="importMatchIntoForm(event)" />
       </div>
     </div>
   </div>
@@ -1261,61 +1261,79 @@
   // ============================================================
   // Export / Import
   // ============================================================
-  function exportData() {
-    const exportObj = {
-      players: state.players,
-      matches: state.matches,
-      currentSeason: state.currentSeason || 1
-    };
-    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `mystic-league-backup-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Data exported!');
+  function exportDataConfirm() {
+    showConfirm('Export Backup',
+      'Download a full backup of all players and matches?',
+      () => {
+        const exportObj = {
+          players: state.players,
+          matches: state.matches,
+          currentSeason: state.currentSeason || 1
+        };
+        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `mystic-league-backup-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Backup exported!');
+      }, 'Export');
   }
 
   function exportMatch(idx) {
     const m = state.matches[idx];
     if (!m) return;
-    const exportObj = { match: m, exportedAt: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `match-${m.date || 'unknown'}-${idx}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Match exported!');
+    const label = m.date ? `match on ${m.date}` : 'this match';
+    showConfirm('Export Match',
+      `Export ${label}?`,
+      () => {
+        // Export raw match object — same format as importMatchIntoForm expects
+        const blob = new Blob([JSON.stringify(m, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `match-${m.date || 'unknown'}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Match exported!');
+      }, 'Export');
   }
 
-  function importData(e) {
+  function importMatchIntoForm(e) {
     if (!isAdmin) return;
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const imported = JSON.parse(ev.target.result);
-        if (!imported.players || !imported.matches) throw new Error('Invalid format');
-        showConfirm('Import Data',
-          `Import ${imported.matches.length} matches and ${imported.players.length} players?<br><span style="color:var(--c-lose);font-size:12px">This will REPLACE all current data.</span>`,
-          () => {
-            state.players        = imported.players  || [];
-            state.matches        = imported.matches  || [];
-            state.currentSeason  = imported.currentSeason || 1;
-            // Preserve existing audit log and deleted records if not in import
-            state.auditLog       = imported.auditLog       || state.auditLog || [];
-            state.deletedMatches = imported.deletedMatches || state.deletedMatches || [];
-            state.deletedPlayers = imported.deletedPlayers || state.deletedPlayers || [];
-            audit('add', `Imported data: ${imported.matches.length} matches, ${imported.players.length} players`);
-            saveState();
-            showToast('Data imported!');
-          });
+        const m = JSON.parse(ev.target.result);
+        // Validate it looks like a match object
+        if (!m.team1 || !m.team2 || !m.winner) throw new Error('Invalid format');
+        if (m.team1.length !== 6 || m.team2.length !== 6) throw new Error('Must be 6v6');
+        // Fill form fields
+        document.getElementById('match-date').value = m.date || '';
+        document.getElementById('match-duration').value = m.duration || '';
+        document.getElementById('match-notes').value = m.notes || '';
+        selectWinner(m.winner);
+        // Fill player and hero dropdowns
+        for (let i = 0; i < 6; i++) {
+          const pName1 = m.team1[i] || '';
+          const pName2 = m.team2[i] || '';
+          const hId1 = m.heroes1 ? m.heroes1[i] : null;
+          const hId2 = m.heroes2 ? m.heroes2[i] : null;
+          const pItem1 = dropdownState[`t1p${i}`]?.items.find(p => p.value === pName1);
+          const pItem2 = dropdownState[`t2p${i}`]?.items.find(p => p.value === pName2);
+          const hItem1 = hId1 ? dropdownState[`t1h${i}`]?.items.find(h => String(h.value) === String(hId1)) : null;
+          const hItem2 = hId2 ? dropdownState[`t2h${i}`]?.items.find(h => String(h.value) === String(hId2)) : null;
+          if (pItem1) { dropdownState[`t1p${i}`].value = pItem1.value; dropdownState[`t1p${i}`].label = pItem1.label; document.getElementById('csd-input-t1p' + i).value = pItem1.label; }
+          if (pItem2) { dropdownState[`t2p${i}`].value = pItem2.value; dropdownState[`t2p${i}`].label = pItem2.label; document.getElementById('csd-input-t2p' + i).value = pItem2.label; }
+          if (hItem1) { dropdownState[`t1h${i}`].value = hItem1.value; dropdownState[`t1h${i}`].label = hItem1.label; document.getElementById('csd-input-t1h' + i).value = hItem1.label; }
+          if (hItem2) { dropdownState[`t2h${i}`].value = hItem2.value; dropdownState[`t2h${i}`].label = hItem2.label; document.getElementById('csd-input-t2h' + i).value = hItem2.label; }
+        }
+        showToast('Match loaded into form!');
       } catch(err) {
-        showToast('Invalid file format', true);
+        showToast('Invalid match file', true);
       }
     };
     reader.readAsText(file);
