@@ -311,6 +311,9 @@
   body.is-admin .admin-only { display: revert; }
   body.is-admin .viewer-only { display: none; }
 </style>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -460,7 +463,6 @@
   // ============================================================
   // Constants
   // ============================================================
-  const STORAGE_KEY = 'deadstats-v1';
   const COLORS = ['#a855f7','#3a9eff','#34c97a','#e84040','#a78bfa','#f97316','#06b6d4','#ec4899','#84cc16','#f59e0b'];
   const BGS    = ['rgba(168,85,247,.2)','rgba(58,158,255,.2)','rgba(52,201,122,.2)','rgba(232,64,64,.2)','rgba(167,139,250,.2)','rgba(249,115,22,.2)','rgba(6,182,212,.2)','rgba(236,72,153,.2)','rgba(132,204,22,.2)','rgba(245,158,11,.2)'];
 
@@ -514,16 +516,35 @@
   }
 
   // ============================================================
-  // Storage
+  // Firebase
   // ============================================================
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) state = JSON.parse(raw);
-      if (!state.auditLog) state.auditLog = [];
-      if (!state.deletedMatches) state.deletedMatches = [];
-      if (!state.deletedPlayers) state.deletedPlayers = [];
-      // Deduplicate players that differ only by casing — keep the first occurrence
+  const firebaseConfig = {
+    apiKey: "AIzaSyACyoqw5KnR5pNq1xnsiPQCVWUy2bkQEME",
+    authDomain: "mystic-inhouse-board.firebaseapp.com",
+    databaseURL: "https://mystic-inhouse-board-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "mystic-inhouse-board",
+    storageBucket: "mystic-inhouse-board.firebasestorage.app",
+    messagingSenderId: "250680677410",
+    appId: "1:250680677410:web:bc77585274ff6d53c6267b"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const dbRef = db.ref('deadstats');
+
+  function initFirebase() {
+    // Show loading state until first data arrives
+    document.getElementById('leaderboard-list').innerHTML =
+      '<div class="empty-state" style="color:var(--c-muted)">Connecting...</div>';
+    // Listen for real-time updates from Firebase
+    dbRef.on('value', snapshot => {
+      const data = snapshot.val() || {};
+      state.players       = data.players       || [];
+      state.matches       = data.matches        || [];
+      state.auditLog      = data.auditLog       || [];
+      state.deletedMatches = data.deletedMatches || [];
+      state.deletedPlayers = data.deletedPlayers || [];
+
+      // Deduplicate players that differ only by casing
       const seen = {};
       state.players = state.players.filter(p => {
         const key = p.name.toLowerCase();
@@ -531,7 +552,7 @@
         seen[key] = true;
         return true;
       });
-      // Canonicalize any match entries that used a now-removed casing variant
+      // Canonicalize match player names
       state.matches.forEach(m => {
         m.team1 = m.team1.map(n => {
           const p = state.players.find(p => p.name.toLowerCase() === n.toLowerCase());
@@ -542,13 +563,22 @@
           return p ? p.name : n;
         });
       });
-    } catch(e) { console.warn('Failed to load state', e); }
+
+      render();
+    });
   }
 
   function saveState() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch(e) { showToast('Storage full — export your data!', true); }
+    dbRef.set({
+      players:        state.players,
+      matches:        state.matches,
+      auditLog:       state.auditLog,
+      deletedMatches: state.deletedMatches || [],
+      deletedPlayers: state.deletedPlayers || []
+    }).catch(err => {
+      showToast('Save failed — check connection', true);
+      console.error('Firebase save error:', err);
+    });
   }
 
   // ============================================================
@@ -910,12 +940,13 @@
         showConfirm('Import Data',
           `Import ${imported.matches.length} matches and ${imported.players.length} players?<br><span style="color:var(--c-lose);font-size:12px">This will REPLACE all current data.</span>`,
           () => {
-            state = imported;
-            if (!state.auditLog) state.auditLog = [];
-            if (!state.deletedMatches) state.deletedMatches = [];
-            if (!state.deletedPlayers) state.deletedPlayers = [];
+            state.players        = imported.players        || [];
+            state.matches         = imported.matches         || [];
+            state.auditLog        = imported.auditLog        || [];
+            state.deletedMatches  = imported.deletedMatches  || [];
+            state.deletedPlayers  = imported.deletedPlayers  || [];
             audit('add', `Imported data: ${imported.matches.length} matches, ${imported.players.length} players`);
-            saveState(); render();
+            saveState();
             showToast('Data imported!');
           });
       } catch(err) {
@@ -1000,12 +1031,12 @@
   // Init
   // ============================================================
   document.getElementById('match-date').value = new Date().toISOString().split('T')[0];
-  loadState();
-  render();
-  // Restore admin session if previously logged in
+  // Restore admin session from localStorage (intentionally per-device)
   if (localStorage.getItem(ADMIN_SESSION_KEY) === '1') {
     setAdminMode(true);
   }
+  // Connect to Firebase and start listening for data
+  initFirebase();
 </script>
 </body>
 </html>
