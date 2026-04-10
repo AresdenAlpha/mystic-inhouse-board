@@ -474,7 +474,6 @@
       </div>
       <button class="btn-primary" onclick="logMatch()">Log Match</button>
       <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--c-border);display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn-sm" onclick="exportDataConfirm()">Export Backup</button>
         <button class="btn-sm" onclick="document.getElementById('import-match-file').click()">Import Match</button>
         <input type="file" id="import-match-file" accept=".json" style="display:none" onchange="importMatchIntoForm(event)" />
       </div>
@@ -485,7 +484,10 @@
   <div id="tab-log" class="section">
     <div class="section-top">
       <div class="section-title">Audit Log</div>
-      <span style="font-size:12px;color:var(--c-muted)" id="log-count"></span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:var(--c-muted)" id="log-count"></span>
+        <button class="btn-sm" onclick="exportDataConfirm()">Export Backup</button>
+      </div>
     </div>
     <div id="audit-list"></div>
   </div>
