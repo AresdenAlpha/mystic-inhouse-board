@@ -1015,7 +1015,7 @@
       const rowClass  = ['rank1','rank2','rank3'][i] || '';
       const season = state.currentSeason || 1;
       const top3 = topHeroes(name, season);
-      const heroIcons = `<div class="hero-icons-row">${top3.map(id => heroIconHtml(id, 22)).join('') || '<span style="font-size:11px;color:var(--c-muted)">—</span>'}</div>`;
+      const heroIcons = `<div class="hero-icons-row">${top3.map(id => heroIconHtml(id, 26)).join('') || '<span style="font-size:11px;color:var(--c-muted)">—</span>'}</div>`;
       return `<div class="lb-row ${rowClass}" style="grid-template-columns:36px 1fr 80px 60px 60px 80px 80px">
         <div class="rank ${rankClass}">#${i+1}</div>
         <div class="player-name">
@@ -1056,11 +1056,14 @@
       const delBtn = isAdmin
         ? `<button class="btn-danger del-match" data-idx="${realIdx}">del</button>`
         : '';
+      const expBtn = isAdmin
+        ? `<button class="btn-sm exp-match" data-idx="${realIdx}" style="font-size:10px;padding:2px 6px;margin-top:4px">export</button>`
+        : '';
       return `<div class="match-card">
         <div>
           <div class="match-result" style="color:${winColor}">${escHtml(winLabel)}</div>
           <div class="match-score">Victory</div>
-          <div style="margin-top:8px;text-align:center">${delBtn}</div>
+          <div style="margin-top:8px;text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center">${delBtn}${expBtn}</div>
         </div>
         <div class="match-teams">
           <div class="match-team"><span class="team-label amber">Amber</span>${t1win} ${pills1}</div>
@@ -1100,7 +1103,7 @@
         : '';
       const season = state.currentSeason || 1;
       const top3 = topHeroes(p.name, season);
-      const heroIcons = top3.map(id => heroIconHtml(id, 26)).join('') || '<span style="font-size:11px;color:var(--c-muted)">No heroes yet</span>';
+      const heroIcons = top3.map(id => heroIconHtml(id, 30)).join('') || '<span style="font-size:11px;color:var(--c-muted)">No heroes yet</span>';
       return `<div class="player-card">
         <div class="player-card-header">
           <div class="avatar-lg" style="background:${av.bg};color:${av.color}">${initials(p.name)}</div>
@@ -1259,7 +1262,12 @@
   // Export / Import
   // ============================================================
   function exportData() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const exportObj = {
+      players: state.players,
+      matches: state.matches,
+      currentSeason: state.currentSeason || 1
+    };
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
@@ -1267,6 +1275,20 @@
     a.click();
     URL.revokeObjectURL(url);
     showToast('Data exported!');
+  }
+
+  function exportMatch(idx) {
+    const m = state.matches[idx];
+    if (!m) return;
+    const exportObj = { match: m, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `match-${m.date || 'unknown'}-${idx}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Match exported!');
   }
 
   function importData(e) {
@@ -1281,11 +1303,13 @@
         showConfirm('Import Data',
           `Import ${imported.matches.length} matches and ${imported.players.length} players?<br><span style="color:var(--c-lose);font-size:12px">This will REPLACE all current data.</span>`,
           () => {
-            state.players        = imported.players        || [];
-            state.matches         = imported.matches         || [];
-            state.auditLog        = imported.auditLog        || [];
-            state.deletedMatches  = imported.deletedMatches  || [];
-            state.deletedPlayers  = imported.deletedPlayers  || [];
+            state.players        = imported.players  || [];
+            state.matches        = imported.matches  || [];
+            state.currentSeason  = imported.currentSeason || 1;
+            // Preserve existing audit log and deleted records if not in import
+            state.auditLog       = imported.auditLog       || state.auditLog || [];
+            state.deletedMatches = imported.deletedMatches || state.deletedMatches || [];
+            state.deletedPlayers = imported.deletedPlayers || state.deletedPlayers || [];
             audit('add', `Imported data: ${imported.matches.length} matches, ${imported.players.length} players`);
             saveState();
             showToast('Data imported!');
@@ -1356,6 +1380,8 @@
   document.addEventListener('click', e => {
     const matchBtn = e.target.closest('.del-match');
     if (matchBtn) { deleteMatch(parseInt(matchBtn.dataset.idx, 10)); return; }
+    const expBtn = e.target.closest('.exp-match');
+    if (expBtn) { exportMatch(parseInt(expBtn.dataset.idx, 10)); return; }
     const playerBtn = e.target.closest('.del-player');
     if (playerBtn) { removePlayer(parseInt(playerBtn.dataset.idx, 10)); return; }
   });
