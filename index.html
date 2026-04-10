@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mystic League — Match Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --c-bg: #0b0a10;
+    --c-surface: #111318;
+    --c-surface2: #181c24;
+    --c-border: rgba(255,255,255,0.07);
+    --c-border2: rgba(255,255,255,0.13);
+    --c-text: #e8eaf0;
+    --c-muted: #6b7280;
+    --c-accent: #a855f7;
+    --c-accent2: #3a9eff;
+    --c-win: #34c97a;
+    --c-lose: #e84040;
+    --c-win-bg: rgba(52,201,122,0.1);
+    --c-lose-bg: rgba(232,64,64,0.1);
+    --c-gold: #f0b429;
+  }
+
+  html, body {
+    font-family: 'Exo 2', sans-serif;
+    background: var(--c-bg);
+    color: var(--c-text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:0; opacity:0.4;
+  }
+
+  .app { position: relative; z-index:1; max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 32px; padding-bottom: 20px;
+    border-bottom: 1px solid var(--c-border2);
+    flex-wrap: wrap; gap: 12px;
+  }
+  .logo { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 3px; text-transform: uppercase; color: var(--c-accent); }
+  .logo span { color: var(--c-text); }
+  .tagline { font-size: 11px; color: var(--c-muted); letter-spacing: 2px; margin-top: 2px; }
+
+  .nav { display: flex; gap: 4px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; padding: 4px; }
+  .nav button {
+    font-family: 'Rajdhani', sans-serif; font-weight: 600; letter-spacing: 1px;
+    font-size: 13px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;
+    background: transparent; color: var(--c-muted); transition: all 0.15s; text-transform: uppercase;
+  }
+  .nav button.active { background: var(--c-accent); color: #000; }
+  .nav button:hover:not(.active) { color: var(--c-text); background: var(--c-surface2); }
+  .nav button.admin-only { display: none; }
+  body.admin-mode .nav button.admin-only { display: inline-block; }
+
+  .section { display: none; }
+  .section.visible { display: block; }
+
+  /* Auth banner */
+  .auth-bar {
+    display: flex; align-items: center; gap: 10px; justify-content: flex-end;
+    margin-bottom: 0;
+  }
+  .auth-status {
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 4px; font-weight: 600;
+  }
+  .auth-status.viewer { background: rgba(107,114,128,0.15); color: var(--c-muted); }
+  .auth-status.admin { background: rgba(168,85,247,0.15); color: var(--c-accent); }
+  .auth-btn {
+    font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+    padding: 4px 12px; border-radius: 4px; cursor: pointer; border: 1px solid var(--c-border2);
+    background: transparent; color: var(--c-muted); transition: all 0.15s; font-family: 'Exo 2', sans-serif;
+  }
+  .auth-btn:hover { color: var(--c-text); border-color: var(--c-accent); }
+
+  /* Viewer overlay on write-only tabs */
+  .viewer-lock {
+    display: none; text-align: center; padding: 48px;
+    color: var(--c-muted); font-size: 14px; line-height: 1.8;
+  }
+  body:not(.admin-mode) .viewer-lock { display: block; }
+  body:not(.admin-mode) .admin-content { display: none; }
+
+  /* Leaderboard */
+  .lb-header {
+    display: grid; grid-template-columns: 36px 1fr 60px 60px 80px 80px;
+    gap: 8px; padding: 8px 16px; margin-bottom: 8px;
+    font-size: 11px; font-weight: 600; letter-spacing: 1.5px; color: var(--c-muted); text-transform: uppercase;
+  }
+  .lb-row {
+    display: grid; grid-template-columns: 36px 1fr 60px 60px 80px 80px;
+    gap: 8px; align-items: center; padding: 14px 16px;
+    background: var(--c-surface); border: 1px solid var(--c-border);
+    border-radius: 8px; margin-bottom: 6px; transition: border-color 0.15s;
+  }
+  .lb-row:hover { border-color: var(--c-border2); }
+  .lb-row.rank1 { border-color: rgba(168,85,247,0.4); background: rgba(168,85,247,0.05); }
+  .lb-row.rank2 { border-color: rgba(192,192,192,0.3); }
+  .lb-row.rank3 { border-color: rgba(184,115,51,0.3); }
+
+  .rank { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--c-muted); text-align: center; }
+  .rank.gold { color: var(--c-accent); font-weight: 700; }
+  .rank.silver { color: #c0c0c0; font-weight: 700; }
+  .rank.bronze { color: #b87333; font-weight: 700; }
+
+  .player-name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+
+  .stat-val { font-family: 'Share Tech Mono', monospace; font-size: 14px; text-align: right; }
+  .stat-val.win { color: var(--c-win); }
+  .stat-val.lose { color: var(--c-lose); }
+
+
+  /* Match history */
+  .match-card {
+    background: var(--c-surface); border: 1px solid var(--c-border);
+    border-radius: 10px; margin-bottom: 8px; padding: 16px;
+    display: grid; grid-template-columns: 90px 1fr auto;
+    gap: 16px; align-items: center; transition: border-color 0.15s;
+  }
+  .match-card:hover { border-color: var(--c-border2); }
+  .match-result { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 2px; text-align: center; text-transform: uppercase; }
+  .match-score { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--c-muted); text-align: center; margin-top: 2px; }
+  .match-teams { display: flex; flex-direction: column; gap: 6px; }
+  .match-team { display: flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; }
+  .team-label { font-size: 10px; letter-spacing: 1px; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-right: 4px; }
+  .team-label.amber { background: rgba(168,85,247,0.15); color: var(--c-accent); }
+  .team-label.blue { background: rgba(58,158,255,0.15); color: var(--c-accent2); }
+  .player-pill { padding: 2px 8px; border-radius: 4px; font-size: 12px; background: var(--c-surface2); border: 1px solid var(--c-border); }
+  .match-meta { text-align: right; font-size: 12px; color: var(--c-muted); }
+  .match-date { font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+
+  /* Forms */
+  .form-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; padding: 24px; }
+  .form-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; color: var(--c-accent); margin-bottom: 20px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--c-muted); }
+  input, select, textarea {
+    background: var(--c-surface2); border: 1px solid var(--c-border2); border-radius: 6px;
+    color: var(--c-text); font-family: 'Exo 2', sans-serif; font-size: 14px;
+    padding: 10px 12px; outline: none; transition: border-color 0.15s; width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--c-accent); }
+  input::placeholder, textarea::placeholder { color: var(--c-muted); }
+  select option { background: var(--c-surface2); }
+  .teams-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: start; margin-bottom: 16px; }
+  .vs-divider { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 22px; color: var(--c-muted); padding-top: 28px; text-align: center; }
+
+  .btn-primary {
+    background: var(--c-accent); color: #000; border: none; border-radius: 6px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 14px;
+    letter-spacing: 1.5px; text-transform: uppercase; padding: 12px 24px;
+    cursor: pointer; transition: opacity 0.15s; width: 100%;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-danger {
+    background: transparent; color: var(--c-lose); border: 1px solid var(--c-border);
+    border-radius: 4px; font-size: 11px; padding: 3px 8px; cursor: pointer;
+    font-family: 'Exo 2', sans-serif; transition: background 0.15s;
+  }
+  .btn-danger:hover { background: var(--c-lose-bg); }
+  .btn-sm {
+    background: var(--c-surface2); color: var(--c-accent); border: 1px solid var(--c-border2);
+    border-radius: 4px; font-size: 11px; padding: 4px 10px; cursor: pointer;
+    font-family: 'Exo 2', sans-serif; font-weight: 600; transition: background 0.15s; white-space: nowrap;
+  }
+  .btn-sm:hover { background: var(--c-border2); }
+
+  /* Players */
+  .players-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .player-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 10px; padding: 16px; transition: border-color 0.15s; }
+  .player-card:hover { border-color: var(--c-border2); }
+  .player-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .avatar-lg { width: 40px; height: 40px; border-radius: 50%; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .player-card-name { font-weight: 600; font-size: 16px; }
+  .player-stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .mini-stat { background: var(--c-surface2); border-radius: 6px; padding: 8px; text-align: center; }
+  .mini-stat-val { font-family: 'Share Tech Mono', monospace; font-size: 16px; }
+  .mini-stat-label { font-size: 10px; color: var(--c-muted); margin-top: 2px; letter-spacing: 1px; text-transform: uppercase; }
+  .wr-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; font-family: 'Share Tech Mono', monospace; }
+  .wr-high { background: var(--c-win-bg); color: var(--c-win); }
+  .wr-low { background: var(--c-lose-bg); color: var(--c-lose); }
+  .wr-mid { background: rgba(168,85,247,0.1); color: var(--c-accent); }
+  .add-player-form { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; }
+  .add-player-form input { flex: 1; }
+
+  .empty-state { text-align: center; padding: 48px; color: var(--c-muted); font-size: 14px; line-height: 1.8; }
+
+  /* Win selector */
+  .win-selector { display: flex; gap: 8px; }
+  .win-btn {
+    flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--c-border2);
+    cursor: pointer; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: 1px; text-transform: uppercase; transition: all 0.15s;
+    background: transparent; color: var(--c-muted);
+  }
+  .win-btn.selected-amber { background: rgba(168,85,247,0.2); color: var(--c-accent); border-color: var(--c-accent); }
+  .win-btn.selected-blue { background: rgba(58,158,255,0.2); color: var(--c-accent2); border-color: var(--c-accent2); }
+
+  .textarea-players { min-height: 80px; resize: vertical; }
+  .hint { font-size: 11px; color: var(--c-muted); margin-top: 4px; }
+  .winner-tag { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: var(--c-win-bg); color: var(--c-win); }
+  .section-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 2px; text-transform: uppercase; color: var(--c-muted); }
+
+  /* Audit log */
+  .log-entry {
+    display: grid; grid-template-columns: 140px 90px 1fr;
+    gap: 12px; align-items: start; padding: 12px 16px;
+    background: var(--c-surface); border: 1px solid var(--c-border);
+    border-radius: 8px; margin-bottom: 6px; font-size: 13px;
+  }
+  .log-time { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--c-muted); line-height: 1.6; }
+  .log-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px; text-align: center; white-space: nowrap;
+    align-self: start;
+  }
+  .log-badge.add-match { background: rgba(52,201,122,0.12); color: var(--c-win); }
+  .log-badge.del-match { background: rgba(232,64,64,0.12); color: var(--c-lose); }
+  .log-badge.add-player { background: rgba(168,85,247,0.12); color: var(--c-accent); }
+  .log-badge.del-player { background: rgba(232,64,64,0.12); color: var(--c-lose); }
+  .log-badge.login { background: rgba(58,158,255,0.12); color: var(--c-accent2); }
+  .log-detail { color: var(--c-muted); line-height: 1.5; }
+  .log-detail strong { color: var(--c-text); font-weight: 600; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+    background: var(--c-win); color: #000; font-weight: 600; font-size: 13px;
+    padding: 10px 18px; border-radius: 8px; transform: translateY(80px); opacity: 0;
+    transition: all 0.3s ease; font-family: 'Exo 2', sans-serif;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { background: var(--c-lose); color: #fff; }
+
+  /* Modals */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+  }
+  .modal-overlay.show { opacity: 1; pointer-events: all; }
+  .modal-box {
+    background: var(--c-surface); border: 1px solid var(--c-border2);
+    border-radius: 12px; padding: 24px 28px; max-width: 360px; width: 90%;
+    transform: translateY(12px); transition: transform 0.2s ease;
+  }
+  .modal-overlay.show .modal-box { transform: translateY(0); }
+  .modal-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; }
+  .modal-title.danger { color: var(--c-lose); }
+  .modal-title.accent { color: var(--c-accent); }
+  .modal-msg { font-size: 14px; color: var(--c-muted); line-height: 1.6; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-cancel { background: transparent; color: var(--c-muted); border: 1px solid var(--c-border2); border-radius: 6px; padding: 8px 18px; cursor: pointer; font-family: 'Exo 2', sans-serif; font-size: 13px; transition: all 0.15s; }
+  .modal-cancel:hover { color: var(--c-text); }
+  .modal-confirm { background: var(--c-lose); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; transition: opacity 0.15s; }
+  .modal-confirm:hover { opacity: 0.85; }
+  .modal-confirm.accent { background: var(--c-accent); color: #000; }
+
+  /* Auth modal password input */
+  .modal-input { width: 100%; margin-bottom: 16px; }
+
+  @media(max-width:640px){
+    .lb-header, .lb-row { grid-template-columns: 28px 1fr 50px 70px; }
+    .lb-header > :nth-child(3), .lb-row > :nth-child(3) { display: none; }
+    .form-row, .teams-row { grid-template-columns: 1fr; }
+    .vs-divider { padding-top: 0; }
+    .match-card { grid-template-columns: 70px 1fr; }
+    .match-meta { display: none; }
+    .nav button { font-size: 11px; padding: 7px 10px; }
+    .log-entry { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+
+
+  /* Audit log */
+  .log-entry {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 16px; background: var(--c-surface); border: 1px solid var(--c-border);
+    border-radius: 8px; margin-bottom: 6px; font-size: 13px;
+  }
+  .log-time {
+    font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--c-muted);
+    white-space: nowrap; padding-top: 1px; min-width: 110px;
+  }
+  .log-action { flex: 1; line-height: 1.5; }
+  .log-type {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-right: 6px;
+  }
+  .log-type.add { background: var(--c-win-bg); color: var(--c-win); }
+  .log-type.del { background: var(--c-lose-bg); color: var(--c-lose); }
+  .log-type.log { background: rgba(168,85,247,0.1); color: var(--c-accent); }
+
+  /* Hide admin-only elements for viewers */
+  .admin-only { display: none; }
+  body.is-admin .admin-only { display: revert; }
+  body.is-admin .viewer-only { display: none; }
+</style>
+</head>
+<body>
+
+<div class="app" id="main-app">
+
+  <header>
+    <div style="display:flex;align-items:center;gap:12px">
+      <img src="data:image/png;base64,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" alt="Mystic League" style="width:48px;height:48px;object-fit:contain;flex-shrink:0" />
+      <div>
+        <div class="logo">Mystic <span>League</span></div>
+        <div class="tagline">In-House Match Tracker</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div id="admin-input-area" style="display:flex;align-items:center;gap:6px">
+        <input type="password" id="pw-input" placeholder="Admin password..." maxlength="32"
+               style="width:160px;padding:6px 10px;font-size:12px;border-radius:6px;background:var(--c-surface2);border:1px solid var(--c-border2);color:var(--c-text);outline:none" />
+        <button onclick="tryAdminLogin()"
+                style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;border-radius:6px;border:none;background:var(--c-accent);color:#000;cursor:pointer;white-space:nowrap">
+          Enter
+        </button>
+        <span id="pw-error" style="font-size:11px;color:var(--c-lose)"></span>
+      </div>
+      <div id="admin-badge-area" style="display:none;align-items:center;gap:8px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:4px;background:rgba(168,85,247,0.15);color:var(--c-accent);border:1px solid rgba(168,85,247,0.25)">Admin</span>
+        <button onclick="adminLogout()"
+                style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;border:1px solid var(--c-border2);background:transparent;color:var(--c-muted);cursor:pointer;font-family:'Exo 2',sans-serif;transition:color 0.15s"
+                onmouseover="this.style.color='var(--c-text)'" onmouseout="this.style.color='var(--c-muted)'">
+          Log out
+        </button>
+      </div>
+      <div class="nav">
+        <button class="active" onclick="showTab('leaderboard')">Board</button>
+        <button onclick="showTab('matches')">Matches</button>
+        <button onclick="showTab('players')">Players</button>
+        <button class="admin-only" onclick="showTab('add')">+ Log</button>
+        <button class="admin-only" onclick="showTab('log')">Audit</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LEADERBOARD -->
+  <div id="tab-leaderboard" class="section visible">
+    <div class="section-top"><div class="section-title">Season Standings</div></div>
+    <div class="lb-header">
+      <div>#</div><div>Player</div>
+      <div style="text-align:right">W</div>
+      <div style="text-align:right">L</div>
+      <div style="text-align:right">Win Rate</div>
+      <div style="text-align:right">Games</div>
+    </div>
+    <div id="leaderboard-list"></div>
+  </div>
+
+  <!-- MATCH HISTORY -->
+  <div id="tab-matches" class="section">
+    <div class="section-top"><div class="section-title">Match History</div></div>
+    <div id="matches-list"></div>
+  </div>
+
+  <!-- PLAYERS -->
+  <div id="tab-players" class="section">
+    <div class="add-player-form">
+      <input type="text" id="new-player-name" placeholder="Search or add player..." maxlength="24" oninput="filterPlayers(this.value)" />
+      <button class="btn-sm admin-only" onclick="addPlayer()">+ Add</button>
+    </div>
+    <div id="players-grid" class="players-grid"></div>
+  </div>
+
+  <!-- LOG MATCH (admin only) -->
+  <div id="tab-add" class="section">
+    <div class="form-card">
+      <div class="form-title">Log Match</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="match-date" />
+        </div>
+        <div class="form-group">
+          <label>Duration (optional)</label>
+          <input type="text" id="match-duration" placeholder="e.g. 32 min" />
+        </div>
+      </div>
+      <div class="teams-row">
+        <div class="form-group">
+          <label style="color:var(--c-accent)">Amber Team</label>
+          <textarea class="textarea-players" id="team1-players" placeholder="One player per line"></textarea>
+          <div class="hint">One name per line</div>
+        </div>
+        <div class="vs-divider">VS</div>
+        <div class="form-group">
+          <label style="color:var(--c-accent2)">Blue Team</label>
+          <textarea class="textarea-players" id="team2-players" placeholder="One player per line"></textarea>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label>Winner</label>
+        <div class="win-selector">
+          <button class="win-btn" id="win-btn-amber" onclick="selectWinner('amber')">Amber Team</button>
+          <button class="win-btn" id="win-btn-blue" onclick="selectWinner('blue')">Blue Team</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:24px">
+        <label>Notes (optional)</label>
+        <input type="text" id="match-notes" placeholder="e.g. comeback win, final push..." />
+      </div>
+      <button class="btn-primary" onclick="logMatch()">Log Match</button>
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--c-border);display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-sm" onclick="exportData()">Export Data (JSON)</button>
+        <button class="btn-sm" onclick="document.getElementById('import-file').click()">Import Data (JSON)</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)" />
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIT LOG (admin only) -->
+  <div id="tab-log" class="section">
+    <div class="section-top">
+      <div class="section-title">Audit Log</div>
+      <span style="font-size:12px;color:var(--c-muted)" id="log-count"></span>
+    </div>
+    <div id="audit-list"></div>
+  </div>
+
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="modalResolve(false)">Cancel</button>
+      <button class="modal-confirm" id="modal-confirm-btn" onclick="modalResolve(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ============================================================
+  // CONFIG — change this password before deploying
+  // ============================================================
+  const ADMIN_PASSWORD = 'ModeSca1ar';
+
+  // ============================================================
+  // Constants
+  // ============================================================
+  const STORAGE_KEY = 'deadstats-v1';
+  const COLORS = ['#a855f7','#3a9eff','#34c97a','#e84040','#a78bfa','#f97316','#06b6d4','#ec4899','#84cc16','#f59e0b'];
+  const BGS    = ['rgba(168,85,247,.2)','rgba(58,158,255,.2)','rgba(52,201,122,.2)','rgba(232,64,64,.2)','rgba(167,139,250,.2)','rgba(249,115,22,.2)','rgba(6,182,212,.2)','rgba(236,72,153,.2)','rgba(132,204,22,.2)','rgba(245,158,11,.2)'];
+
+  // ============================================================
+  // State
+  // ============================================================
+  let state = { players: [], matches: [], auditLog: [] };
+  let isAdmin = false;
+  let selectedWinner = null;
+  let playerFilter = '';
+
+  // ============================================================
+  // Auth
+  // ============================================================
+  const ADMIN_SESSION_KEY = 'deadstats-admin';
+
+  function tryAdminLogin() {
+    const pw = document.getElementById('pw-input').value;
+    if (pw !== ADMIN_PASSWORD) {
+      document.getElementById('pw-error').textContent = 'Wrong password';
+      document.getElementById('pw-input').select();
+      setTimeout(() => { document.getElementById('pw-error').textContent = ''; }, 2000);
+      return;
+    }
+    setAdminMode(true);
+    localStorage.setItem(ADMIN_SESSION_KEY, '1');
+    document.getElementById('pw-input').value = '';
+    showToast('Admin mode enabled');
+  }
+
+  function adminLogout() {
+    showConfirm('Log Out', 'Exit admin mode?', () => {
+      setAdminMode(false);
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      showTab('leaderboard');
+    }, 'Log Out');
+  }
+
+  function setAdminMode(on) {
+    isAdmin = on;
+    if (on) {
+      document.body.classList.add('is-admin');
+      document.getElementById('admin-input-area').style.display = 'none';
+      document.getElementById('admin-badge-area').style.display = 'flex';
+    } else {
+      document.body.classList.remove('is-admin');
+      document.getElementById('admin-input-area').style.display = 'flex';
+      document.getElementById('admin-badge-area').style.display = 'none';
+    }
+    render();
+  }
+
+  // ============================================================
+  // Storage
+  // ============================================================
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) state = JSON.parse(raw);
+      if (!state.auditLog) state.auditLog = [];
+      if (!state.deletedMatches) state.deletedMatches = [];
+      if (!state.deletedPlayers) state.deletedPlayers = [];
+      // Deduplicate players that differ only by casing — keep the first occurrence
+      const seen = {};
+      state.players = state.players.filter(p => {
+        const key = p.name.toLowerCase();
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+      // Canonicalize any match entries that used a now-removed casing variant
+      state.matches.forEach(m => {
+        m.team1 = m.team1.map(n => {
+          const p = state.players.find(p => p.name.toLowerCase() === n.toLowerCase());
+          return p ? p.name : n;
+        });
+        m.team2 = m.team2.map(n => {
+          const p = state.players.find(p => p.name.toLowerCase() === n.toLowerCase());
+          return p ? p.name : n;
+        });
+      });
+    } catch(e) { console.warn('Failed to load state', e); }
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch(e) { showToast('Storage full — export your data!', true); }
+  }
+
+  // ============================================================
+  // Audit log
+  // ============================================================
+  function audit(type, message, data) {
+    const entry = {
+      id: Date.now() + Math.random(),
+      ts: new Date().toISOString(),
+      type,   // 'add' | 'del' | 'log'
+      message,
+      data: data || null
+    };
+    state.auditLog.unshift(entry);
+    // Keep last 500 entries
+    if (state.auditLog.length > 500) state.auditLog = state.auditLog.slice(0, 500);
+  }
+
+  // ============================================================
+  // Helpers
+  // ============================================================
+  function initials(name) {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  }
+
+  function getColor(name) {
+    const idx = state.players.findIndex(p => p.name === name);
+    const i = (idx >= 0 ? idx : 0) % COLORS.length;
+    return { color: COLORS[i], bg: BGS[i] };
+  }
+
+  function computeStats() {
+    const stats = {};
+    state.players.forEach(p => { stats[p.name] = { wins: 0, losses: 0, games: 0 }; });
+    state.matches.forEach(m => {
+      const winners = m.winner === 'amber' ? m.team1 : m.team2;
+      const losers  = m.winner === 'amber' ? m.team2 : m.team1;
+      winners.forEach(n => {
+        if (!stats[n]) stats[n] = { wins: 0, losses: 0, games: 0 };
+        stats[n].wins++; stats[n].games++;
+      });
+      losers.forEach(n => {
+        if (!stats[n]) stats[n] = { wins: 0, losses: 0, games: 0 };
+        stats[n].losses++; stats[n].games++;
+      });
+    });
+    return stats;
+  }
+
+  function wr(s) { return s.games > 0 ? Math.round((s.wins / s.games) * 100) : 0; }
+  function wrColor(w) {
+    // Gradient: red=<30%, neutral=50%, green=>70%
+    // Apply power curve so color shifts aggressively away from 50%
+    // Colors: red=#e84040, neutral=#8b8fa8, green=#34c97a
+    const clamp = v => Math.max(0, Math.min(1, v));
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    // Remap: 30->0, 50->0.5, 70->1, then apply power curve
+    const raw = clamp((w - 20) / 60); // 0 at 20%, 1 at 80%
+    // Power curve: push values away from 0.5 aggressively
+    const t = raw < 0.5
+      ? 0.5 * Math.pow(raw * 2, 2.8)
+      : 1 - 0.5 * Math.pow((1 - raw) * 2, 2.8);
+    let r, g, b;
+    if (t <= 0.5) {
+      const u = t / 0.5;
+      r = lerp(232, 139, u); g = lerp(64, 143, u); b = lerp(64, 168, u);
+    } else {
+      const u = (t - 0.5) / 0.5;
+      r = lerp(139, 52, u); g = lerp(143, 201, u); b = lerp(168, 122, u);
+    }
+    return `rgb(${r},${g},${b})`;
+  }
+  function wrClass(w) { return w >= 55 ? 'wr-high' : w <= 45 ? 'wr-low' : 'wr-mid'; }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtDate(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' })
+             + ' ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    } catch { return iso; }
+  }
+
+  // ============================================================
+  // Render
+  // ============================================================
+  function render() {
+    renderLeaderboard();
+    renderMatches();
+    renderPlayers();
+    renderAuditLog();
+  }
+
+  function renderLeaderboard() {
+    const stats = computeStats();
+    const sorted = Object.entries(stats)
+      .filter(([, s]) => s.games > 0)
+      .sort((a, b) => {
+        const diff = wr(b[1]) - wr(a[1]);
+        return diff !== 0 ? diff : b[1].wins - a[1].wins;
+      });
+
+    const el = document.getElementById('leaderboard-list');
+    if (!sorted.length) {
+      el.innerHTML = '<div class="empty-state">No matches logged yet.<br>Log your first match to see the standings.</div>';
+      return;
+    }
+    el.innerHTML = sorted.map(([name, s], i) => {
+      const av = getColor(name);
+      const w = wr(s);
+      const rankClass = ['gold','silver','bronze'][i] || '';
+      const rowClass  = ['rank1','rank2','rank3'][i] || '';
+      return `<div class="lb-row ${rowClass}">
+        <div class="rank ${rankClass}">#${i+1}</div>
+        <div class="player-name">
+          <div class="avatar" style="background:${av.bg};color:${av.color}">${initials(name)}</div>
+          ${escHtml(name)}
+        </div>
+        <div class="stat-val win">${s.wins}</div>
+        <div class="stat-val lose">${s.losses}</div>
+        <div style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:600;color:${wrColor(w)}">${w}%</div>
+        <div class="stat-val" style="color:var(--c-muted)">${s.games}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderMatches() {
+    const el = document.getElementById('matches-list');
+    if (!state.matches.length) {
+      el.innerHTML = '<div class="empty-state">No matches yet.<br>Log your first match!</div>';
+      return;
+    }
+    el.innerHTML = [...state.matches].reverse().map((m, ri) => {
+      const realIdx = state.matches.length - 1 - ri;
+      const winColor = m.winner === 'amber' ? 'var(--c-accent)' : 'var(--c-accent2)';
+      const winLabel = m.winner === 'amber' ? 'Amber' : 'Blue';
+      const pills1 = m.team1.map(n => `<span class="player-pill">${escHtml(n)}</span>`).join('');
+      const pills2 = m.team2.map(n => `<span class="player-pill">${escHtml(n)}</span>`).join('');
+      const t1win = m.winner === 'amber' ? '<span class="winner-tag">WIN</span>' : '';
+      const t2win = m.winner === 'blue'  ? '<span class="winner-tag">WIN</span>' : '';
+      const delBtn = isAdmin
+        ? `<button class="btn-danger del-match" data-idx="${realIdx}">del</button>`
+        : '';
+      return `<div class="match-card">
+        <div>
+          <div class="match-result" style="color:${winColor}">${escHtml(winLabel)}</div>
+          <div class="match-score">Victory</div>
+          <div style="margin-top:8px;text-align:center">${delBtn}</div>
+        </div>
+        <div class="match-teams">
+          <div class="match-team"><span class="team-label amber">Amber</span>${t1win} ${pills1}</div>
+          <div class="match-team" style="margin-top:4px"><span class="team-label blue">Blue</span>${t2win} ${pills2}</div>
+          ${m.notes ? `<div style="font-size:12px;color:var(--c-muted);margin-top:6px;font-style:italic">${escHtml(m.notes)}</div>` : ''}
+        </div>
+        <div class="match-meta">
+          <div class="match-date">${m.date || ''}</div>
+          ${m.duration ? `<div style="margin-top:4px">${escHtml(m.duration)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderPlayers() {
+    const stats = computeStats();
+    const el = document.getElementById('players-grid');
+    const filtered = playerFilter
+      ? state.players.filter(p => p.name.toLowerCase().startsWith(playerFilter))
+      : state.players;
+
+    if (!state.players.length) {
+      el.innerHTML = '<div class="empty-state">Add players to get started.</div>';
+      return;
+    }
+    if (!filtered.length) {
+      el.innerHTML = '<div class="empty-state">No players match "' + escHtml(playerFilter) + '"</div>';
+      return;
+    }
+    el.innerHTML = filtered.map(p => {
+      const idx = state.players.indexOf(p);
+      const av = getColor(p.name);
+      const s = stats[p.name] || { wins: 0, losses: 0, games: 0 };
+      const w = wr(s);
+      const delBtn = isAdmin
+        ? `<button class="btn-danger del-player" data-idx="${idx}">x</button>`
+        : '';
+      return `<div class="player-card">
+        <div class="player-card-header">
+          <div class="avatar-lg" style="background:${av.bg};color:${av.color}">${initials(p.name)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="player-card-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(p.name)}</div>
+            <span class="wr-badge ${wrClass(w)}">${w}% WR</span>
+          </div>
+          ${delBtn}
+        </div>
+        <div class="player-stats-row">
+          <div class="mini-stat"><div class="mini-stat-val" style="color:var(--c-win)">${s.wins}</div><div class="mini-stat-label">Wins</div></div>
+          <div class="mini-stat"><div class="mini-stat-val" style="color:var(--c-lose)">${s.losses}</div><div class="mini-stat-label">Losses</div></div>
+          <div class="mini-stat"><div class="mini-stat-val">${s.games}</div><div class="mini-stat-label">Games</div></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderAuditLog() {
+    const el = document.getElementById('audit-list');
+    const countEl = document.getElementById('log-count');
+    if (!state.auditLog || !state.auditLog.length) {
+      el.innerHTML = '<div class="empty-state">No actions recorded yet.</div>';
+      countEl.textContent = '';
+      return;
+    }
+    countEl.textContent = state.auditLog.length + ' entries';
+    el.innerHTML = state.auditLog.map(e => {
+      const typeLabel = {add:'ADD',del:'DELETE',log:'MATCH'}[e.type] || e.type.toUpperCase();
+      return `<div class="log-entry">
+        <div class="log-time">${fmtDate(e.ts)}</div>
+        <div class="log-action">
+          <span class="log-type ${e.type}">${typeLabel}</span>
+          ${escHtml(e.message)}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ============================================================
+  // Actions
+  // ============================================================
+  function addPlayer() {
+    if (!isAdmin) return;
+    const inp = document.getElementById('new-player-name');
+    const name = inp.value.trim();
+    if (!name) return;
+    if (state.players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+      showToast('Player already exists', true); return;
+    }
+    state.players.push({ name });
+    audit('add', `Added player "${name}"`);
+    playerFilter = '';
+    saveState(); renderPlayers(); renderAuditLog();
+    inp.value = '';
+    showToast(`${name} added`);
+  }
+
+  function removePlayer(idx) {
+    if (!isAdmin) return;
+    const p = state.players[idx];
+    if (!p) return;
+    showConfirm('Remove Player', `Remove <strong>${escHtml(p.name)}</strong>? Their match history stays intact.`, () => {
+      // Soft-delete: keep a copy in deletedPlayers
+      if (!state.deletedPlayers) state.deletedPlayers = [];
+      state.deletedPlayers.push({ ...p, deletedAt: new Date().toISOString() });
+      audit('del', `Removed player "${p.name}"`, { player: p });
+      state.players.splice(idx, 1);
+      saveState(); render();
+      showToast('Player removed');
+    });
+  }
+
+  function deleteMatch(idx) {
+    if (!isAdmin) return;
+    const m = state.matches[idx];
+    if (!m) return;
+    const t1 = m.team1.join(', ');
+    const t2 = m.team2.join(', ');
+    const winner = m.winner === 'amber' ? 'Amber' : 'Blue';
+    showConfirm('Delete Match',
+      `Delete match: <strong>${escHtml(t1)}</strong> vs <strong>${escHtml(t2)}</strong>?<br><span style="color:var(--c-muted);font-size:12px">Winner: ${winner} — ${m.date || 'no date'}</span>`,
+      () => {
+        // Soft-delete: keep a copy
+        if (!state.deletedMatches) state.deletedMatches = [];
+        state.deletedMatches.push({ ...m, deletedAt: new Date().toISOString() });
+        audit('del', `Deleted match — ${winner} won (${m.date || 'no date'}). Teams: [${t1}] vs [${t2}]`, { match: m });
+        state.matches.splice(idx, 1);
+        saveState(); render();
+        showToast('Match deleted');
+      });
+  }
+
+  function selectWinner(team) {
+    selectedWinner = team;
+    document.getElementById('win-btn-amber').className = 'win-btn' + (team === 'amber' ? ' selected-amber' : '');
+    document.getElementById('win-btn-blue').className  = 'win-btn' + (team === 'blue'  ? ' selected-blue'  : '');
+  }
+
+  function logMatch() {
+    if (!isAdmin) return;
+    const t1raw    = document.getElementById('team1-players').value.trim();
+    const t2raw    = document.getElementById('team2-players').value.trim();
+    const date     = document.getElementById('match-date').value;
+    const duration = document.getElementById('match-duration').value.trim();
+    const notes    = document.getElementById('match-notes').value.trim();
+
+    const team1 = t1raw.split('\n').map(s => s.trim()).filter(Boolean);
+    const team2 = t2raw.split('\n').map(s => s.trim()).filter(Boolean);
+
+    if (!team1.length || !team2.length) { showToast('Both teams need at least 1 player', true); return; }
+    if (!selectedWinner) { showToast('Select the winning team', true); return; }
+
+    const unknown = [...team1, ...team2].filter(
+      name => !state.players.find(p => p.name.toLowerCase() === name.toLowerCase())
+    );
+    if (unknown.length) {
+      showToast(`Unknown player${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')} — add them in Players first`, true);
+      return;
+    }
+
+    // Normalize typed names to canonical casing stored in the players list
+    const canonicalize = name => {
+      const found = state.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+      return found ? found.name : name;
+    };
+    const team1c = team1.map(canonicalize);
+    const team2c = team2.map(canonicalize);
+
+    const match = { team1: team1c, team2: team2c, winner: selectedWinner, date, duration, notes };
+    state.matches.push(match);
+    const winner = selectedWinner === 'amber' ? 'Amber' : 'Blue';
+    audit('log', `Logged match — ${winner} won. Amber: [${team1c.join(', ')}] vs Blue: [${team2c.join(', ')}]${date ? ' on ' + date : ''}`, { match });
+    saveState(); render();
+
+    document.getElementById('team1-players').value = '';
+    document.getElementById('team2-players').value = '';
+    document.getElementById('match-duration').value = '';
+    document.getElementById('match-notes').value = '';
+    selectedWinner = null;
+    document.getElementById('win-btn-amber').className = 'win-btn';
+    document.getElementById('win-btn-blue').className  = 'win-btn';
+
+    showToast('Match logged!');
+    showTab('matches');
+  }
+
+  // ============================================================
+  // Export / Import
+  // ============================================================
+  function exportData() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `mystic-league-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Data exported!');
+  }
+
+  function importData(e) {
+    if (!isAdmin) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (!imported.players || !imported.matches) throw new Error('Invalid format');
+        showConfirm('Import Data',
+          `Import ${imported.matches.length} matches and ${imported.players.length} players?<br><span style="color:var(--c-lose);font-size:12px">This will REPLACE all current data.</span>`,
+          () => {
+            state = imported;
+            if (!state.auditLog) state.auditLog = [];
+            if (!state.deletedMatches) state.deletedMatches = [];
+            if (!state.deletedPlayers) state.deletedPlayers = [];
+            audit('add', `Imported data: ${imported.matches.length} matches, ${imported.players.length} players`);
+            saveState(); render();
+            showToast('Data imported!');
+          });
+      } catch(err) {
+        showToast('Invalid file format', true);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  // ============================================================
+  // UI helpers
+  // ============================================================
+  function showTab(tab) {
+    const tabs = ['leaderboard','matches','players','add','log'];
+    tabs.forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      if (el) el.classList.toggle('visible', t === tab);
+    });
+    document.querySelectorAll('.nav button').forEach((b, i) => {
+      const tabNames = isAdmin
+        ? ['leaderboard','matches','players','add','log']
+        : ['leaderboard','matches','players'];
+      b.classList.toggle('active', tabNames[i] === tab);
+    });
+  }
+
+  function showToast(msg, err = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (err ? ' error' : '');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.className = 'toast'; }, 2800);
+  }
+
+  // ============================================================
+  // Custom confirm modal
+  // ============================================================
+  let modalResolve = () => {};
+  function showConfirm(title, msg, onConfirm, confirmLabel = 'Delete') {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-msg').innerHTML = msg;
+    document.getElementById('modal-confirm-btn').textContent = confirmLabel;
+    document.getElementById('modal-overlay').classList.add('show');
+    modalResolve = (confirmed) => {
+      document.getElementById('modal-overlay').classList.remove('show');
+      modalResolve = () => {};
+      if (confirmed) onConfirm();
+    };
+  }
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-overlay')) modalResolve(false);
+  });
+
+  // ============================================================
+  // Player filter
+  // ============================================================
+  function filterPlayers(query) {
+    playerFilter = query.trim().toLowerCase();
+    renderPlayers();
+  }
+
+  // ============================================================
+  // Event delegation for delete buttons
+  // ============================================================
+  document.addEventListener('click', e => {
+    const matchBtn = e.target.closest('.del-match');
+    if (matchBtn) { deleteMatch(parseInt(matchBtn.dataset.idx, 10)); return; }
+    const playerBtn = e.target.closest('.del-player');
+    if (playerBtn) { removePlayer(parseInt(playerBtn.dataset.idx, 10)); return; }
+  });
+
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryAdminLogin();
+  });
+
+  document.getElementById('new-player-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addPlayer();
+  });
+
+  // ============================================================
+  // Init
+  // ============================================================
+  document.getElementById('match-date').value = new Date().toISOString().split('T')[0];
+  loadState();
+  render();
+  // Restore admin session if previously logged in
+  if (localStorage.getItem(ADMIN_SESSION_KEY) === '1') {
+    setAdminMode(true);
+  }
+</script>
+</body>
+</html>
