@@ -320,7 +320,33 @@
   /* Match log form - player rows */
   .team-rows { display: flex; flex-direction: column; gap: 6px; }
   .player-hero-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; }
-  .player-hero-row select { padding: 7px 10px; font-size: 13px; }
+
+  /* Custom searchable dropdown */
+  .csd-wrap { position: relative; }
+  .csd-input {
+    width: 100%; padding: 7px 10px; font-size: 13px; cursor: pointer;
+    background: var(--c-surface2); border: 1px solid var(--c-border2);
+    border-radius: 6px; color: var(--c-text); font-family: 'Exo 2', sans-serif;
+    outline: none; transition: border-color 0.15s;
+  }
+  .csd-input:focus { border-color: var(--c-accent); }
+  .csd-input.has-value { color: var(--c-text); }
+  .csd-input::placeholder { color: var(--c-muted); }
+  .csd-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 500;
+    background: var(--c-surface); border: 1px solid var(--c-border2);
+    border-radius: 8px; max-height: 200px; overflow-y: auto;
+    display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .csd-list.open { display: block; }
+  .csd-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    cursor: pointer; font-size: 13px; transition: background 0.1s;
+  }
+  .csd-item:hover, .csd-item.focused { background: var(--c-surface2); }
+  .csd-item img { width: 22px; height: 22px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
+  .csd-item .csd-placeholder-icon { width: 22px; height: 22px; border-radius: 3px; background: var(--c-surface2); border: 1px solid var(--c-border); flex-shrink: 0; }
+  .csd-empty { padding: 10px 12px; font-size: 12px; color: var(--c-muted); }
 
   /* Match history hero pills */
   .player-hero-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; border-radius: 4px; font-size: 12px; background: var(--c-surface2); border: 1px solid var(--c-border); }
@@ -553,25 +579,158 @@
       .map(([id]) => parseInt(id));
   }
 
+  // ── Custom searchable dropdown ───────────────────────────────────────────
+  // Each dropdown tracks: { value, label, open, focusIdx }
+  const dropdownState = {};
+
+  function makeCsd(id, items, placeholder) {
+    // items: [{value, label, icon?}]
+    dropdownState[id] = { value: '', label: '', items, filtered: items, open: false, focusIdx: -1 };
+    return `<div class="csd-wrap" id="csd-wrap-${id}">
+      <input class="csd-input" id="csd-input-${id}" placeholder="${placeholder}"
+             autocomplete="off" readonly
+             onfocus="csdOpen('${id}')"
+             oninput="csdFilter('${id}', this.value)"
+             onkeydown="csdKey(event, '${id}')" />
+      <div class="csd-list" id="csd-list-${id}"></div>
+    </div>`;
+  }
+
+  function csdRenderList(id) {
+    const ds = dropdownState[id];
+    const el = document.getElementById('csd-list-' + id);
+    if (!el) return;
+    if (!ds.filtered.length) {
+      el.innerHTML = '<div class="csd-empty">No results</div>';
+      return;
+    }
+    el.innerHTML = ds.filtered.map((item, i) => {
+      const icon = item.icon
+        ? `<img src="${item.icon}" onerror="this.style.display='none'" />`
+        : `<div class="csd-placeholder-icon"></div>`;
+      return `<div class="csd-item${i === ds.focusIdx ? ' focused' : ''}"
+        onmousedown="csdSelect('${id}', ${JSON.stringify(item.value)}, ${JSON.stringify(item.label)})"
+        data-idx="${i}">${icon}<span>${escHtml(item.label)}</span></div>`;
+    }).join('');
+  }
+
+  function csdOpen(id) {
+    // Close all others first
+    Object.keys(dropdownState).forEach(k => { if (k !== id) csdClose(k); });
+    const ds = dropdownState[id];
+    ds.open = true;
+    ds.filtered = ds.items;
+    ds.focusIdx = -1;
+    const inp = document.getElementById('csd-input-' + id);
+    if (inp) { inp.readOnly = false; inp.value = ''; }
+    const list = document.getElementById('csd-list-' + id);
+    if (list) list.classList.add('open');
+    csdRenderList(id);
+  }
+
+  function csdClose(id) {
+    const ds = dropdownState[id];
+    if (!ds) return;
+    ds.open = false;
+    const list = document.getElementById('csd-list-' + id);
+    if (list) list.classList.remove('open');
+    // Restore label in input
+    const inp = document.getElementById('csd-input-' + id);
+    if (inp) { inp.readOnly = true; inp.value = ds.label; }
+  }
+
+  function csdFilter(id, query) {
+    const ds = dropdownState[id];
+    const q = query.toLowerCase();
+    ds.filtered = ds.items.filter(item => item.label.toLowerCase().includes(q));
+    ds.focusIdx = -1;
+    csdRenderList(id);
+  }
+
+  function csdSelect(id, value, label) {
+    const ds = dropdownState[id];
+    ds.value = value;
+    ds.label = label;
+    csdClose(id);
+  }
+
+  function csdKey(e, id) {
+    const ds = dropdownState[id];
+    if (!ds.open) { if (e.key === 'Enter' || e.key === ' ') csdOpen(id); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      ds.focusIdx = Math.min(ds.focusIdx + 1, ds.filtered.length - 1);
+      csdRenderList(id);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      ds.focusIdx = Math.max(ds.focusIdx - 1, 0);
+      csdRenderList(id);
+    } else if (e.key === 'Enter' && ds.focusIdx >= 0) {
+      const item = ds.filtered[ds.focusIdx];
+      if (item) csdSelect(id, item.value, item.label);
+    } else if (e.key === 'Escape') {
+      csdClose(id);
+    }
+  }
+
+  function csdGetValue(id) {
+    return dropdownState[id] ? dropdownState[id].value : '';
+  }
+
+  function csdReset(id) {
+    const ds = dropdownState[id];
+    if (!ds) return;
+    ds.value = ''; ds.label = ''; ds.filtered = ds.items; ds.open = false; ds.focusIdx = -1;
+    const inp = document.getElementById('csd-input-' + id);
+    if (inp) inp.value = '';
+    const list = document.getElementById('csd-list-' + id);
+    if (list) list.classList.remove('open');
+  }
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('mousedown', e => {
+    Object.keys(dropdownState).forEach(id => {
+      const wrap = document.getElementById('csd-wrap-' + id);
+      if (wrap && !wrap.contains(e.target)) csdClose(id);
+    });
+  });
+
   function renderMatchForm() {
+    const playerItems = state.players.map(p => ({ value: p.name, label: p.name, icon: null }));
+    const heroItems = heroes.map(h => ({ value: h.id, label: h.name, icon: h.icon }));
+
     ['team1-rows', 'team2-rows'].forEach((containerId, ti) => {
       const el = document.getElementById(containerId);
       if (!el) return;
+      // Preserve existing selections if form already exists
+      const existing = {};
+      for (let i = 0; i < 6; i++) {
+        const pid = `t${ti+1}p${i}`, hid = `t${ti+1}h${i}`;
+        existing[pid] = csdGetValue(pid);
+        existing[hid] = csdGetValue(hid);
+      }
       const rows = Array.from({length: 6}, (_, i) => {
-        const playerOpts = state.players.map(p => `<option value="${escHtml(p.name)}">${escHtml(p.name)}</option>`).join('');
-        const heroOpts = heroes.map(heroOption).join('');
+        const pid = `t${ti+1}p${i}`, hid = `t${ti+1}h${i}`;
         return `<div class="player-hero-row">
-          <select id="t${ti+1}p${i}" data-team="${ti+1}" data-slot="${i}">
-            <option value="">— Player —</option>
-            ${playerOpts}
-          </select>
-          <select id="t${ti+1}h${i}" data-team="${ti+1}" data-slot="${i}">
-            <option value="">— Hero —</option>
-            ${heroOpts}
-          </select>
+          ${makeCsd(pid, playerItems, '— Player —')}
+          ${makeCsd(hid, heroItems, '— Hero —')}
         </div>`;
       }).join('');
       el.innerHTML = rows;
+      // Restore selections
+      for (let i = 0; i < 6; i++) {
+        const pid = `t${ti+1}p${i}`, hid = `t${ti+1}h${i}`;
+        if (existing[pid]) {
+          const item = playerItems.find(p => p.value === existing[pid]);
+          if (item) { dropdownState[pid].value = item.value; dropdownState[pid].label = item.label;
+            const inp = document.getElementById('csd-input-' + pid); if (inp) inp.value = item.label; }
+        }
+        if (existing[hid]) {
+          const item = heroItems.find(h => String(h.value) === String(existing[hid]));
+          if (item) { dropdownState[hid].value = item.value; dropdownState[hid].label = item.label;
+            const inp = document.getElementById('csd-input-' + hid); if (inp) inp.value = item.label; }
+        }
+      }
     });
   }
 
@@ -655,6 +814,7 @@
     }
     updateSeasonUI();
     render();
+    if (on) renderMatchForm();
   }
 
   // ============================================================
@@ -707,6 +867,7 @@
       });
 
       render();
+      renderMatchForm();
     });
   }
 
@@ -1034,15 +1195,13 @@
     const duration = document.getElementById('match-duration').value.trim();
     const notes    = document.getElementById('match-notes').value.trim();
 
-    // Read from structured rows
+    // Read from custom searchable dropdowns
     const team1 = [], team2 = [], heroes1 = [], heroes2 = [];
     for (let i = 0; i < 6; i++) {
-      const p1 = document.getElementById(`t1p${i}`)?.value || '';
-      const h1 = document.getElementById(`t1h${i}`)?.value || '';
-      const p2 = document.getElementById(`t2p${i}`)?.value || '';
-      const h2 = document.getElementById(`t2h${i}`)?.value || '';
-      team1.push(p1); heroes1.push(h1 ? parseInt(h1) : null);
-      team2.push(p2); heroes2.push(h2 ? parseInt(h2) : null);
+      team1.push(csdGetValue(`t1p${i}`));
+      heroes1.push(csdGetValue(`t1h${i}`) ? parseInt(csdGetValue(`t1h${i}`)) : null);
+      team2.push(csdGetValue(`t2p${i}`));
+      heroes2.push(csdGetValue(`t2h${i}`) ? parseInt(csdGetValue(`t2h${i}`)) : null);
     }
 
     // Validate all 6 players selected per team
@@ -1071,14 +1230,8 @@
 
     // Reset form
     for (let i = 0; i < 6; i++) {
-      const el1p = document.getElementById(`t1p${i}`);
-      const el1h = document.getElementById(`t1h${i}`);
-      const el2p = document.getElementById(`t2p${i}`);
-      const el2h = document.getElementById(`t2h${i}`);
-      if (el1p) el1p.value = '';
-      if (el1h) el1h.value = '';
-      if (el2p) el2p.value = '';
-      if (el2h) el2h.value = '';
+      csdReset(`t1p${i}`); csdReset(`t1h${i}`);
+      csdReset(`t2p${i}`); csdReset(`t2h${i}`);
     }
     document.getElementById('match-duration').value = '';
     document.getElementById('match-notes').value = '';
