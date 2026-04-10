@@ -95,12 +95,12 @@
 
   /* Leaderboard */
   .lb-header {
-    display: grid; grid-template-columns: 36px 1fr 60px 60px 80px 80px;
+    display: grid; grid-template-columns: 36px 1fr 80px 60px 60px 80px 80px;
     gap: 8px; padding: 8px 16px; margin-bottom: 8px;
     font-size: 11px; font-weight: 600; letter-spacing: 1.5px; color: var(--c-muted); text-transform: uppercase;
   }
   .lb-row {
-    display: grid; grid-template-columns: 36px 1fr 60px 60px 80px 80px;
+    display: grid; grid-template-columns: 36px 1fr 80px 60px 60px 80px 80px;
     gap: 8px; align-items: center; padding: 14px 16px;
     background: var(--c-surface); border: 1px solid var(--c-border);
     border-radius: 8px; margin-bottom: 6px; transition: border-color 0.15s;
@@ -310,6 +310,29 @@
   .admin-only { display: none; }
   body.is-admin .admin-only { display: revert; }
   body.is-admin .viewer-only { display: none; }
+
+  /* Hero icons */
+  .hero-icon { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; flex-shrink: 0; background: var(--c-surface2); }
+  .hero-icon-sm { width: 22px; height: 22px; border-radius: 3px; object-fit: cover; }
+  .hero-icons-row { display: flex; gap: 4px; align-items: center; }
+  .hero-icon-placeholder { width: 22px; height: 22px; border-radius: 3px; background: var(--c-surface2); border: 1px solid var(--c-border); }
+
+  /* Match log form - player rows */
+  .team-rows { display: flex; flex-direction: column; gap: 6px; }
+  .player-hero-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; }
+  .player-hero-row select { padding: 7px 10px; font-size: 13px; }
+
+  /* Match history hero pills */
+  .player-hero-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; border-radius: 4px; font-size: 12px; background: var(--c-surface2); border: 1px solid var(--c-border); }
+
+  /* Season banner */
+  .season-banner {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--c-surface); border: 1px solid var(--c-border);
+    border-radius: 8px; padding: 10px 16px; margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .season-label { font-family: 'Rajdhani', sans-serif; font-weight: 700; letter-spacing: 1px; color: var(--c-accent); font-size: 14px; }
 </style>
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -357,9 +380,13 @@
 
   <!-- LEADERBOARD -->
   <div id="tab-leaderboard" class="section visible">
+    <div class="season-banner">
+      <div><span class="season-label" id="season-label">Season 1</span></div>
+      <button class="btn-sm admin-only" onclick="newSeason()" style="display:none">New Season</button>
+    </div>
     <div class="section-top"><div class="section-title">Season Standings</div></div>
-    <div class="lb-header">
-      <div>#</div><div>Player</div>
+    <div class="lb-header" style="grid-template-columns:36px 1fr 80px 60px 60px 80px 80px">
+      <div>#</div><div>Player</div><div>Top Heroes</div>
       <div style="text-align:right">W</div>
       <div style="text-align:right">L</div>
       <div style="text-align:right">Win Rate</div>
@@ -399,14 +426,13 @@
       </div>
       <div class="teams-row">
         <div class="form-group">
-          <label style="color:var(--c-accent)">Amber Team</label>
-          <textarea class="textarea-players" id="team1-players" placeholder="One player per line"></textarea>
-          <div class="hint">One name per line</div>
+          <label style="color:var(--c-accent)">Amber Team <span style="color:var(--c-muted);font-weight:400">(6 players)</span></label>
+          <div class="team-rows" id="team1-rows"></div>
         </div>
         <div class="vs-divider">VS</div>
         <div class="form-group">
-          <label style="color:var(--c-accent2)">Blue Team</label>
-          <textarea class="textarea-players" id="team2-players" placeholder="One player per line"></textarea>
+          <label style="color:var(--c-accent2)">Blue Team <span style="color:var(--c-muted);font-weight:400">(6 players)</span></label>
+          <div class="team-rows" id="team2-rows"></div>
         </div>
       </div>
       <div class="form-group" style="margin-bottom:20px">
@@ -458,7 +484,6 @@
   // ============================================================
   // CONFIG — change this password before deploying
   // ============================================================
-  const ADMIN_PASSWORD = 'ModeSca1ar';
 
   // ============================================================
   // Constants
@@ -469,19 +494,135 @@
   // ============================================================
   // State
   // ============================================================
-  let state = { players: [], matches: [], auditLog: [] };
+  let state = { players: [], matches: [], auditLog: [], currentSeason: 1, seasons: [] };
   let isAdmin = false;
   let selectedWinner = null;
   let playerFilter = '';
+  let heroes = []; // loaded from deadlock-api
+
+  // ============================================================
+  // Heroes
+  // ============================================================
+  async function loadHeroes() {
+    try {
+      const res = await fetch('https://assets.deadlock-api.com/v2/heroes?only_active=true');
+      const data = await res.json();
+      heroes = data
+        .filter(h => h.name && !h.name.startsWith('hero_'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(h => ({
+          id: h.id,
+          name: h.name,
+          icon: h.images?.icon_hero_card_webp || h.images?.minimap_image || null
+        }));
+      renderMatchForm();
+    } catch(e) {
+      console.warn('Failed to load heroes:', e);
+    }
+  }
+
+  function heroOption(h) {
+    return `<option value="${h.id}">${escHtml(h.name)}</option>`;
+  }
+
+  function heroById(id) {
+    return heroes.find(h => h.id == id) || null;
+  }
+
+  function heroIconHtml(id, size = 22) {
+    const h = heroById(id);
+    if (!h || !h.icon) return `<div class="hero-icon-placeholder" style="width:${size}px;height:${size}px"></div>`;
+    return `<img class="hero-icon-sm" src="${h.icon}" title="${escHtml(h.name)}" style="width:${size}px;height:${size}px" onerror="this.style.display='none'" />`;
+  }
+
+  function topHeroes(playerName, season) {
+    const counts = {};
+    const seasonMatches = state.matches.filter(m => (m.season || 1) === season);
+    seasonMatches.forEach(m => {
+      const allPlayers = [...m.team1, ...m.team2];
+      const idx1 = m.team1.indexOf(playerName);
+      const idx2 = m.team2.indexOf(playerName);
+      let heroId = null;
+      if (idx1 >= 0 && m.heroes1) heroId = m.heroes1[idx1];
+      else if (idx2 >= 0 && m.heroes2) heroId = m.heroes2[idx2];
+      if (heroId) counts[heroId] = (counts[heroId] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([id]) => parseInt(id));
+  }
+
+  function renderMatchForm() {
+    ['team1-rows', 'team2-rows'].forEach((containerId, ti) => {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const rows = Array.from({length: 6}, (_, i) => {
+        const playerOpts = state.players.map(p => `<option value="${escHtml(p.name)}">${escHtml(p.name)}</option>`).join('');
+        const heroOpts = heroes.map(heroOption).join('');
+        return `<div class="player-hero-row">
+          <select id="t${ti+1}p${i}" data-team="${ti+1}" data-slot="${i}">
+            <option value="">— Player —</option>
+            ${playerOpts}
+          </select>
+          <select id="t${ti+1}h${i}" data-team="${ti+1}" data-slot="${i}">
+            <option value="">— Hero —</option>
+            ${heroOpts}
+          </select>
+        </div>`;
+      }).join('');
+      el.innerHTML = rows;
+    });
+  }
+
+  // ============================================================
+  // Seasons
+  // ============================================================
+  function newSeason() {
+    showConfirm('New Season',
+      `Start Season ${(state.currentSeason || 1) + 1}? Current season stats will be archived.`,
+      () => {
+        const archived = {
+          season: state.currentSeason || 1,
+          matches: state.matches.filter(m => (m.season || 1) === (state.currentSeason || 1)),
+          archivedAt: new Date().toISOString()
+        };
+        if (!state.seasons) state.seasons = [];
+        state.seasons.push(archived);
+        state.currentSeason = (state.currentSeason || 1) + 1;
+        audit('add', `Started Season ${state.currentSeason}`);
+        saveState();
+        showToast(`Season ${state.currentSeason} started!`);
+      }, 'Start New Season');
+  }
+
+  function updateSeasonUI() {
+    const s = state.currentSeason || 1;
+    const lbl = document.getElementById('season-label');
+    if (lbl) lbl.textContent = `Season ${s}`;
+    // Show new season button for admins
+    const btn = document.querySelector('.season-banner .btn-sm');
+    if (btn) btn.style.display = isAdmin ? 'inline-block' : 'none';
+  }
 
   // ============================================================
   // Auth
   // ============================================================
   const ADMIN_SESSION_KEY = 'deadstats-admin';
 
-  function tryAdminLogin() {
+  async function tryAdminLogin() {
     const pw = document.getElementById('pw-input').value;
-    if (pw !== ADMIN_PASSWORD) {
+    if (!pw) return;
+    // Hash the input with SHA-256 and compare to stored hash in Firebase
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pw);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // Fetch stored hash from Firebase
+    const snapshot = await db.ref('adminHash').get();
+    const storedHash = snapshot.val();
+    if (hashHex !== storedHash) {
       document.getElementById('pw-error').textContent = 'Wrong password';
       document.getElementById('pw-input').select();
       setTimeout(() => { document.getElementById('pw-error').textContent = ''; }, 2000);
@@ -512,6 +653,7 @@
       document.getElementById('admin-input-area').style.display = 'flex';
       document.getElementById('admin-badge-area').style.display = 'none';
     }
+    updateSeasonUI();
     render();
   }
 
@@ -611,20 +753,23 @@
   }
 
   function computeStats() {
+    const season = state.currentSeason || 1;
     const stats = {};
     state.players.forEach(p => { stats[p.name] = { wins: 0, losses: 0, games: 0 }; });
-    state.matches.forEach(m => {
-      const winners = m.winner === 'amber' ? m.team1 : m.team2;
-      const losers  = m.winner === 'amber' ? m.team2 : m.team1;
-      winners.forEach(n => {
-        if (!stats[n]) stats[n] = { wins: 0, losses: 0, games: 0 };
-        stats[n].wins++; stats[n].games++;
+    state.matches
+      .filter(m => (m.season || 1) === season)
+      .forEach(m => {
+        const winners = m.winner === 'amber' ? m.team1 : m.team2;
+        const losers  = m.winner === 'amber' ? m.team2 : m.team1;
+        winners.forEach(n => {
+          if (!stats[n]) stats[n] = { wins: 0, losses: 0, games: 0 };
+          stats[n].wins++; stats[n].games++;
+        });
+        losers.forEach(n => {
+          if (!stats[n]) stats[n] = { wins: 0, losses: 0, games: 0 };
+          stats[n].losses++; stats[n].games++;
+        });
       });
-      losers.forEach(n => {
-        if (!stats[n]) stats[n] = { wins: 0, losses: 0, games: 0 };
-        stats[n].losses++; stats[n].games++;
-      });
-    });
     return stats;
   }
 
@@ -669,6 +814,7 @@
   // Render
   // ============================================================
   function render() {
+    updateSeasonUI();
     renderLeaderboard();
     renderMatches();
     renderPlayers();
@@ -694,12 +840,16 @@
       const w = wr(s);
       const rankClass = ['gold','silver','bronze'][i] || '';
       const rowClass  = ['rank1','rank2','rank3'][i] || '';
-      return `<div class="lb-row ${rowClass}">
+      const season = state.currentSeason || 1;
+      const top3 = topHeroes(name, season);
+      const heroIcons = `<div class="hero-icons-row">${top3.map(id => heroIconHtml(id, 22)).join('') || '<span style="font-size:11px;color:var(--c-muted)">—</span>'}</div>`;
+      return `<div class="lb-row ${rowClass}" style="grid-template-columns:36px 1fr 80px 60px 60px 80px 80px">
         <div class="rank ${rankClass}">#${i+1}</div>
         <div class="player-name">
           <div class="avatar" style="background:${av.bg};color:${av.color}">${initials(name)}</div>
           ${escHtml(name)}
         </div>
+        ${heroIcons}
         <div class="stat-val win">${s.wins}</div>
         <div class="stat-val lose">${s.losses}</div>
         <div style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:600;color:${wrColor(w)}">${w}%</div>
@@ -718,8 +868,16 @@
       const realIdx = state.matches.length - 1 - ri;
       const winColor = m.winner === 'amber' ? 'var(--c-accent)' : 'var(--c-accent2)';
       const winLabel = m.winner === 'amber' ? 'Amber' : 'Blue';
-      const pills1 = m.team1.map(n => `<span class="player-pill">${escHtml(n)}</span>`).join('');
-      const pills2 = m.team2.map(n => `<span class="player-pill">${escHtml(n)}</span>`).join('');
+      const pills1 = m.team1.map((n, idx) => {
+        const hid = m.heroes1 ? m.heroes1[idx] : null;
+        const icon = hid ? heroIconHtml(hid, 18) : '';
+        return `<span class="player-hero-pill">${icon}<span>${escHtml(n)}</span></span>`;
+      }).join('');
+      const pills2 = m.team2.map((n, idx) => {
+        const hid = m.heroes2 ? m.heroes2[idx] : null;
+        const icon = hid ? heroIconHtml(hid, 18) : '';
+        return `<span class="player-hero-pill">${icon}<span>${escHtml(n)}</span></span>`;
+      }).join('');
       const t1win = m.winner === 'amber' ? '<span class="winner-tag">WIN</span>' : '';
       const t2win = m.winner === 'blue'  ? '<span class="winner-tag">WIN</span>' : '';
       const delBtn = isAdmin
@@ -767,6 +925,9 @@
       const delBtn = isAdmin
         ? `<button class="btn-danger del-player" data-idx="${idx}">x</button>`
         : '';
+      const season = state.currentSeason || 1;
+      const top3 = topHeroes(p.name, season);
+      const heroIcons = top3.map(id => heroIconHtml(id, 26)).join('') || '<span style="font-size:11px;color:var(--c-muted)">No heroes yet</span>';
       return `<div class="player-card">
         <div class="player-card-header">
           <div class="avatar-lg" style="background:${av.bg};color:${av.color}">${initials(p.name)}</div>
@@ -776,6 +937,7 @@
           </div>
           ${delBtn}
         </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">${heroIcons}</div>
         <div class="player-stats-row">
           <div class="mini-stat"><div class="mini-stat-val" style="color:var(--c-win)">${s.wins}</div><div class="mini-stat-label">Wins</div></div>
           <div class="mini-stat"><div class="mini-stat-val" style="color:var(--c-lose)">${s.losses}</div><div class="mini-stat-label">Losses</div></div>
@@ -868,42 +1030,56 @@
 
   function logMatch() {
     if (!isAdmin) return;
-    const t1raw    = document.getElementById('team1-players').value.trim();
-    const t2raw    = document.getElementById('team2-players').value.trim();
     const date     = document.getElementById('match-date').value;
     const duration = document.getElementById('match-duration').value.trim();
     const notes    = document.getElementById('match-notes').value.trim();
 
-    const team1 = t1raw.split('\n').map(s => s.trim()).filter(Boolean);
-    const team2 = t2raw.split('\n').map(s => s.trim()).filter(Boolean);
-
-    if (!team1.length || !team2.length) { showToast('Both teams need at least 1 player', true); return; }
-    if (!selectedWinner) { showToast('Select the winning team', true); return; }
-
-    const unknown = [...team1, ...team2].filter(
-      name => !state.players.find(p => p.name.toLowerCase() === name.toLowerCase())
-    );
-    if (unknown.length) {
-      showToast(`Unknown player${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')} — add them in Players first`, true);
-      return;
+    // Read from structured rows
+    const team1 = [], team2 = [], heroes1 = [], heroes2 = [];
+    for (let i = 0; i < 6; i++) {
+      const p1 = document.getElementById(`t1p${i}`)?.value || '';
+      const h1 = document.getElementById(`t1h${i}`)?.value || '';
+      const p2 = document.getElementById(`t2p${i}`)?.value || '';
+      const h2 = document.getElementById(`t2h${i}`)?.value || '';
+      team1.push(p1); heroes1.push(h1 ? parseInt(h1) : null);
+      team2.push(p2); heroes2.push(h2 ? parseInt(h2) : null);
     }
 
-    // Normalize typed names to canonical casing stored in the players list
-    const canonicalize = name => {
-      const found = state.players.find(p => p.name.toLowerCase() === name.toLowerCase());
-      return found ? found.name : name;
-    };
-    const team1c = team1.map(canonicalize);
-    const team2c = team2.map(canonicalize);
+    // Validate all 6 players selected per team
+    if (team1.some(p => !p)) { showToast('All 6 Amber players must be selected', true); return; }
+    if (team2.some(p => !p)) { showToast('All 6 Blue players must be selected', true); return; }
+    if (!selectedWinner) { showToast('Select the winning team', true); return; }
 
-    const match = { team1: team1c, team2: team2c, winner: selectedWinner, date, duration, notes };
+    // No duplicate players across teams
+    const allPlayers = [...team1, ...team2];
+    const unique = new Set(allPlayers);
+    if (unique.size !== allPlayers.length) { showToast('A player cannot appear twice in the same match', true); return; }
+
+    // All heroes must be selected
+    if (heroes1.some(h => !h)) { showToast('All 6 Amber heroes must be selected', true); return; }
+    if (heroes2.some(h => !h)) { showToast('All 6 Blue heroes must be selected', true); return; }
+
+    const match = {
+      team1, team2, heroes1, heroes2,
+      winner: selectedWinner, date, duration, notes,
+      season: state.currentSeason || 1
+    };
     state.matches.push(match);
     const winner = selectedWinner === 'amber' ? 'Amber' : 'Blue';
-    audit('log', `Logged match — ${winner} won. Amber: [${team1c.join(', ')}] vs Blue: [${team2c.join(', ')}]${date ? ' on ' + date : ''}`, { match });
-    saveState(); render();
+    audit('log', `Logged match — ${winner} won. Amber: [${team1.join(', ')}] vs Blue: [${team2.join(', ')}]${date ? ' on ' + date : ''}`, { match });
+    saveState();
 
-    document.getElementById('team1-players').value = '';
-    document.getElementById('team2-players').value = '';
+    // Reset form
+    for (let i = 0; i < 6; i++) {
+      const el1p = document.getElementById(`t1p${i}`);
+      const el1h = document.getElementById(`t1h${i}`);
+      const el2p = document.getElementById(`t2p${i}`);
+      const el2h = document.getElementById(`t2h${i}`);
+      if (el1p) el1p.value = '';
+      if (el1h) el1h.value = '';
+      if (el2p) el2p.value = '';
+      if (el2h) el2h.value = '';
+    }
     document.getElementById('match-duration').value = '';
     document.getElementById('match-notes').value = '';
     selectedWinner = null;
@@ -1035,8 +1211,8 @@
   if (localStorage.getItem(ADMIN_SESSION_KEY) === '1') {
     setAdminMode(true);
   }
-  // Connect to Firebase and start listening for data
-  initFirebase();
+  // Load heroes from deadlock-api, then connect to Firebase
+  loadHeroes().then(() => initFirebase()).catch(() => initFirebase());
 </script>
 </body>
 </html>
