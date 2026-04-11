@@ -27,7 +27,7 @@ function renderLeaderboard() {
     const rowClass  = ['rank1','rank2','rank3'][i] || '';
     const season = state.currentSeason || 1;
     const top3 = topHeroes(name, season);
-    const heroIcons = `<div class="hero-icons-row">${top3.map(id => heroIconHtml(id, 26)).join('') || '<span style="font-size:11px;color:var(--c-muted)">—</span>'}</div>`;
+    const heroIcons = `<div class="hero-icons-row">${top3.map(id => heroIconHtml(id, 32)).join('') || '<span style="font-size:11px;color:var(--c-muted)">—</span>'}</div>`;
     return `<div class="lb-row ${rowClass}" style="grid-template-columns:36px 1fr 80px 60px 60px 80px 80px">
       <div class="rank ${rankClass}">#${i+1}</div>
       <div class="player-name">
@@ -55,12 +55,12 @@ function renderMatches() {
     const winLabel = m.winner === 'amber' ? 'Amber' : 'Blue';
     const pills1 = m.team1.map((n, idx) => {
       const hid = m.heroes1 ? m.heroes1[idx] : null;
-      const icon = hid ? heroIconHtml(hid, 18) : '';
+      const icon = hid ? heroIconHtml(hid, 22) : '';
       return `<span class="player-hero-pill">${icon}<span>${escHtml(n)}</span></span>`;
     }).join('');
     const pills2 = m.team2.map((n, idx) => {
       const hid = m.heroes2 ? m.heroes2[idx] : null;
-      const icon = hid ? heroIconHtml(hid, 18) : '';
+      const icon = hid ? heroIconHtml(hid, 22) : '';
       return `<span class="player-hero-pill">${icon}<span>${escHtml(n)}</span></span>`;
     }).join('');
     const t1win = m.winner === 'amber' ? '<span class="winner-tag">WIN</span>' : '';
@@ -118,7 +118,7 @@ function renderPlayers() {
       : '';
     const season = state.currentSeason || 1;
     const top3 = topHeroes(p.name, season);
-    const heroIcons = top3.map(id => heroIconHtml(id, 30)).join('') || '<span style="font-size:11px;color:var(--c-muted)">No heroes yet</span>';
+    const heroIcons = top3.map(id => heroIconHtml(id, 36)).join('') || '<span style="font-size:11px;color:var(--c-muted)">No heroes yet</span>';
     return `<div class="player-card">
       <div class="player-card-header">
         <div class="avatar-lg" style="background:${av.bg};color:${av.color}">${initials(p.name)}</div>

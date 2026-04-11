@@ -232,9 +232,9 @@ body.is-admin .viewer-only { display: none; }
 
 /* Hero icons */
 .hero-icon { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; flex-shrink: 0; background: var(--c-surface2); }
-.hero-icon-sm { width: 22px; height: 22px; border-radius: 3px; object-fit: cover; }
+.hero-icon-sm { width: 28px; height: 28px; border-radius: 3px; object-fit: cover; }
 .hero-icons-row { display: flex; gap: 4px; align-items: center; }
-.hero-icon-placeholder { width: 22px; height: 22px; border-radius: 3px; background: var(--c-surface2); border: 1px solid var(--c-border); }
+.hero-icon-placeholder { width: 28px; height: 28px; border-radius: 3px; background: var(--c-surface2); border: 1px solid var(--c-border); }
 
 /* Match log form - player rows */
 .team-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -263,8 +263,8 @@ body.is-admin .viewer-only { display: none; }
   cursor: pointer; font-size: 13px; transition: background 0.1s;
 }
 .csd-item:hover, .csd-item.focused { background: var(--c-surface2); }
-.csd-item img { width: 22px; height: 22px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
-.csd-item .csd-placeholder-icon { width: 22px; height: 22px; border-radius: 3px; background: var(--c-surface2); border: 1px solid var(--c-border); flex-shrink: 0; }
+.csd-item img { width: 28px; height: 28px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
+.csd-item .csd-placeholder-icon { width: 28px; height: 28px; border-radius: 3px; background: var(--c-surface2); border: 1px solid var(--c-border); flex-shrink: 0; }
 .csd-empty { padding: 10px 12px; font-size: 12px; color: var(--c-muted); }
 
 /* Toast */
