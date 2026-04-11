@@ -124,7 +124,7 @@ function renderPlayers() {
         <div class="avatar-lg" style="background:${av.bg};color:${av.color}">${initials(p.name)}</div>
         <div style="flex:1;min-width:0">
           <div class="player-card-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(p.name)}</div>
-          <span class="wr-badge ${wrClass(w)}">${w}% WR</span>
+          <span class="wr-badge" style="color:${wrColor(w)};background:${wrColor(w)}1a">${w}% WR</span>
         </div>
         ${delBtn}
       </div>
